@@ -1,16 +1,25 @@
 package main
 
 import (
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/julienschmidt/httprouter"
+	"greenlight.dheeraj.net/internal/models"
 )
 
-func (app *application) writeJSON(w http.ResponseWriter, status int, data any, headers http.Header) error {
-	js, err := json.Marshal(data, json.Deterministic(true))
+type envelope map[string]any
+
+func (app *application) writeJSON(w http.ResponseWriter, status int, data envelope, headers http.Header) error {
+	opts := []json.Options{
+		json.Deterministic(true),
+		jsontext.Multiline(true),
+		json.WithMarshalers(models.RuntimeMarshaler),
+	}
+	js, err := json.Marshal(data, opts...)
 	if err != nil {
 		return err
 	}
