@@ -1,8 +1,8 @@
 package main
 
 import (
-    "fmt"
-    "net/http"
+	"fmt"
+	"net/http"
 )
 
 func (app *application) recoverPanic(next http.Handler) http.Handler {
