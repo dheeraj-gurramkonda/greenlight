@@ -5,6 +5,10 @@ import (
 	"net/http"
 )
 
+type badRequestError struct {
+	Message string
+}
+
 func (app *application) logError(r *http.Request, err error) {
 	var (
 		method = r.Method
@@ -38,4 +42,12 @@ func (app *application) notFoundResponse(w http.ResponseWriter, r *http.Request)
 func (app *application) methodNotAllowedResponse(w http.ResponseWriter, r *http.Request) {
 	message := fmt.Sprintf("the %s method is not supported for this resource", r.Method)
 	app.errorResponse(w, r, http.StatusMethodNotAllowed, message)
+}
+
+func (e badRequestError) Error() string {
+	return e.Message
+}
+
+func (app *application) badRequestResponse(w http.ResponseWriter, r *http.Request, err error) {
+	app.errorResponse(w, r, http.StatusBadRequest, err.Error())
 }

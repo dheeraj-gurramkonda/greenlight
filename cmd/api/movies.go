@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -16,9 +16,15 @@ func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Reques
 		Genres []string `json:"genres"`
 	}
 
-	err := json.UnmarshalRead(r.Body, &input)
+	err := app.readJSON(w, r, &input)
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err.Error())
+		var badRequestErr *badRequestError
+		switch {
+		case errors.As(err, &badRequestErr):
+			app.badRequestResponse(w, r, err)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
 		return
 	}
 
