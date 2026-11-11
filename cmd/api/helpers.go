@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -53,7 +54,8 @@ func (app *application) readIDParam(r *http.Request) (int, error) {
 }
 
 func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
-	err := json.UnmarshalRead(r.Body, dst)
+	r.Body = http.MaxBytesReader(w, r.Body, 1_048_576)
+	err := json.UnmarshalRead(r.Body, dst, json.RejectUnknownMembers(true))
 	if err != nil {
 		var synErr *jsontext.SyntacticError
 		var semErr *json.SemanticError
@@ -63,9 +65,7 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any
 			return convertSyntacticErrorToBadRequest(synErr)
 
 		case errors.As(err, &semErr):
-			return &badRequestError{
-				Message: "there was a semantic error",
-			}
+			return convertSemanticErrorToBadRequest(semErr)
 
 		default:
 			return err
@@ -98,6 +98,53 @@ func convertSyntacticErrorToBadRequest(synErr *jsontext.SyntacticError) *badRequ
 		detail = "unexpected end of JSON"
 	}
 	fmt.Fprintf(&buf, ": %s", detail)
+
+	return &badRequestError{Message: buf.String()}
+}
+
+func isClientSemanticError(semErr *json.SemanticError) bool {
+	if semErr.Err != nil {
+		msgs := []string{
+			"ambiguous object member name",
+			"cannot derive concrete type for nil interface with finite type set",
+			"Go struct has no exported fields",
+			"value must be passed as a non-nil pointer reference",
+		}
+		if slices.Contains(msgs, semErr.Err.Error()) {
+			return false
+		}
+	}
+
+	if semErr.ByteOffset == 0 && semErr.JSONKind == jsontext.KindBeginObject {
+		return true
+	}
+
+	if semErr.ByteOffset > 0 {
+		return true
+	}
+
+	return false
+}
+
+func convertSemanticErrorToBadRequest(semErr *json.SemanticError) *badRequestError {
+	if errors.Is(semErr, json.ErrUnknownName) {
+		return &badRequestError{
+			Message: fmt.Sprintf("request body contains unknown key %s", semErr.JSONPointer),
+		}
+	}
+
+	var buf strings.Builder
+
+	pointer := string(semErr.JSONPointer)
+	if pointer == "" {
+		pointer = "request body"
+	}
+	fmt.Fprintf(&buf, "%s contains an unsupported JSON type or invalid value", pointer)
+
+	offset := semErr.ByteOffset
+	if offset > 0 {
+		fmt.Fprintf(&buf, " at position %d", offset)
+	}
 
 	return &badRequestError{Message: buf.String()}
 }
