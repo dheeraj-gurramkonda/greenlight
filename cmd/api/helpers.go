@@ -55,12 +55,21 @@ func (app *application) readIDParam(r *http.Request) (int, error) {
 
 func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, 1_048_576)
-	err := json.UnmarshalRead(r.Body, dst, json.RejectUnknownMembers(true))
+	opts := []json.Options{
+		json.RejectUnknownMembers(true),
+		json.WithUnmarshalers(models.RuntimeUnmarshaler),
+	}
+
+	err := json.UnmarshalRead(r.Body, dst, opts...)
 	if err != nil {
 		var synErr *jsontext.SyntacticError
 		var semErr *json.SemanticError
+		var maxBytesErr *http.MaxBytesError
 
 		switch {
+		case errors.As(err, &maxBytesErr):
+			return convertMaxBytesErrorToBadRequest(maxBytesErr)
+
 		case errors.As(err, &synErr):
 			return convertSyntacticErrorToBadRequest(synErr)
 
@@ -147,4 +156,10 @@ func convertSemanticErrorToBadRequest(semErr *json.SemanticError) *badRequestErr
 	}
 
 	return &badRequestError{Message: buf.String()}
+}
+
+func convertMaxBytesErrorToBadRequest(maxBytesErr *http.MaxBytesError) *badRequestError {
+	return &badRequestError{
+		Message: fmt.Sprintf("request body must not be larger than %d bytes", maxBytesErr.Limit),
+	}
 }

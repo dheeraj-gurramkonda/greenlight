@@ -7,13 +7,15 @@ import (
 	"time"
 
 	"greenlight.dheeraj.net/internal/models"
+	"greenlight.dheeraj.net/internal/validator"
 )
 
 func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Title  string   `json:"title"`
-		Year   int      `json:"year"`
-		Genres []string `json:"genres"`
+		Title   string         `json:"title"`
+		Year    int            `json:"year"`
+		Runtime models.Runtime `json:"runtime"`
+		Genres  []string       `json:"genres"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -25,6 +27,19 @@ func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Reques
 		default:
 			app.serverErrorResponse(w, r, err)
 		}
+		return
+	}
+	movie := models.Movie{
+		Title:   input.Title,
+		Year:    input.Year,
+		Runtime: input.Runtime,
+		Genres:  input.Genres,
+	}
+
+	v := validator.New()
+
+	if models.ValidateMovie(v, movie); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 
