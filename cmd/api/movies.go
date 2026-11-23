@@ -103,40 +103,45 @@ func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Reques
 		Title   *string         `json:"title"`
 		Year    *int            `json:"year"`
 		Runtime *models.Runtime `json:"runtime"`
-		Genres  []string       `json:"genres"`
+		Genres  []string        `json:"genres"`
 	}
 
 	if input.Title != nil {
-        movie.Title = *input.Title
-    }
+		movie.Title = *input.Title
+	}
 
-    if input.Year != nil {
-        movie.Year = *input.Year
-    }
-    if input.Runtime != nil {
-        movie.Runtime = *input.Runtime
-    }
-    if input.Genres != nil {
-        movie.Genres = input.Genres
-    }
+	if input.Year != nil {
+		movie.Year = *input.Year
+	}
+	if input.Runtime != nil {
+		movie.Runtime = *input.Runtime
+	}
+	if input.Genres != nil {
+		movie.Genres = input.Genres
+	}
 
 	v := validator.New()
-    
-    if models.ValidateMovie(v, movie); !v.Valid() {
-        app.failedValidationResponse(w, r, v.Errors)
-        return
-    }
 
-    movie, err = app.models.Movies.Update(movie)
-    if err != nil {
-        app.serverErrorResponse(w, r, err)
-        return
-    }
+	if models.ValidateMovie(v, movie); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
 
-    err = app.writeJSON(w, http.StatusOK, envelope{"movie": movie}, nil)
-    if err != nil {
-        app.serverErrorResponse(w, r, err)
-    }
+	movie, err = app.models.Movies.Update(movie)
+	if err != nil {
+		switch {
+		case errors.Is(err, models.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"movie": movie}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }
 
 func (app *application) deleteMovieHandler(w http.ResponseWriter, r *http.Request) {
